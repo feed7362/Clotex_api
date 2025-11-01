@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screen Print AI - Професійне розділення на шари</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="animated-bg">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container">
+        <!-- Hero Section -->
+        <header class="hero">
+            <div class="logo">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="url(#gradient1)" />
+                    <path d="M2 17L12 22L22 17" stroke="url(#gradient1)" stroke-width="2" />
+                    <path d="M2 12L12 17L22 12" stroke="url(#gradient1)" stroke-width="2" />
+                    <defs>
+                        <linearGradient id="gradient1" x1="2" y1="2" x2="22" y2="22">
+                            <stop offset="0%" stop-color="#667eea" />
+                            <stop offset="100%" stop-color="#764ba2" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span>Screen Print AI</span>
+            </div>
+            
+            <div class="hero-content">
+                <h1 class="glitch" data-text="Трафаретний Друк">
+                    Трафаретний Друк
+                </h1>
+                <h2 class="hero-subtitle">Нового Покоління</h2>
+                <p class="hero-description">
+                    Штучний інтелект автоматично розділить ваше зображення на кольорові шари 
+                    для професійного трафаретного друку за лічені секунди
+                </p>
+                
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-number">2-10</div>
+                        <div class="stat-label">кольорів</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">&lt;30s</div>
+                        <div class="stat-label">обробка</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">100%</div>
+                        <div class="stat-label">точність</div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <!-- Upload Section -->
+            <section class="upload-section card-modern">
+                <div class="section-header">
+                    <h3>
+                        <span class="step-badge">01</span>
+                        Завантажте зображення
+                    </h3>
+                </div>
+                
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="fileInput" accept="image/*">
+                    <div class="upload-content" id="uploadContent">
+                        <div class="upload-icon">
+                            <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                            </svg>
+                        </div>
+                        <h4>Перетягніть фото або натисніть для вибору</h4>
+                        <p class="file-types">PNG, JPG, JPEG • Макс. 10MB</p>
+                    </div>
+                    <div id="previewImage" class="preview-image hidden"></div>
+                </div>
+
+                <div class="controls-grid">
+                    <div class="control-card">
+                        <label for="colorCount">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M2 12h20"/>
+                            </svg>
+                            Кількість кольорів
+                        </label>
+                        <div class="slider-wrapper">
+                            <input type="range" id="colorCount" min="2" max="10" value="4" step="1">
+                            <div class="slider-value" id="colorValue">4</div>
+                        </div>
+                    </div>
+                    
+                    <div class="control-card">
+                        <label for="tolerance">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                <path d="M2 17l10 5 10-5"/>
+                                <path d="M2 12l10 5 10-5"/>
+                            </svg>
+                            Толерантність
+                        </label>
+                        <div class="slider-wrapper">
+                            <input type="range" id="tolerance" min="5" max="50" value="30" step="1">
+                            <div class="slider-value" id="toleranceValue">30</div>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="processBtn" class="btn-hero" disabled>
+                    <span>Обробити зображення</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </button>
+            </section>
+
+            <!-- Progress Section -->
+            <div id="progressSection" class="progress-section card-modern hidden">
+                <div class="progress-content">
+                    <div class="progress-icon">
+                        <div class="spinner"></div>
+                    </div>
+                    <h3 id="progressText">Обробка...</h3>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <section id="resultsSection" class="results-section hidden">
+                <div class="section-header">
+                    <h3>
+                        <span class="step-badge">02</span>
+                        Результати
+                    </h3>
+                    <button id="downloadAllBtn" class="btn-outline">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                        </svg>
+                        Завантажити всі
+                    </button>
+                </div>
+
+                <!-- Preview with Layers -->
+                <div class="preview-container card-modern">
+                    <div class="preview-header">
+                        <h4>Попередній перегляд</h4>
+                        <div class="preview-controls">
+                            <div class="opacity-control">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path d="M12 2v20M12 2l-3 3M12 2l3 3"/>
+                                </svg>
+                                <input type="range" id="layerOpacity" min="20" max="100" value="85" step="5">
+                                <span id="opacityValue">85%</span>
+                            </div>
+                            <div class="info-badge">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M12 16v-4M12 8h.01"/>
+                                </svg>
+                                <span>Регулюйте прозорість</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="canvas-wrapper">
+                        <canvas id="previewCanvas"></canvas>
+                    </div>
+                    
+                    <div class="layer-controls" id="layerControls"></div>
+                </div>
+
+                <!-- Individual Layers -->
+                <div class="layers-section">
+                    <h4>Окремі шари для друку</h4>
+                    <div id="layersContainer" class="layers-grid"></div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="url(#gradient2)" />
+                        <defs>
+                            <linearGradient id="gradient2" x1="2" y1="2" x2="22" y2="22">
+                                <stop offset="0%" stop-color="#667eea" />
+                                <stop offset="100%" stop-color="#764ba2" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <span>Screen Print AI</span>
+                </div>
+                <p>Powered by AI • Made with ❤️ in Ukraine • 2025</p>
+            </div>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
