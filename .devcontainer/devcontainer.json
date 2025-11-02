@@ -1,0 +1,37 @@
+{
+	"name": "Tensorflow GPU",
+	"image": "tensorflow/tensorflow:2.15.0-gpu",
+	
+    "forwardPorts": [8080],
+	"runArgs": [
+		"--gpus",
+		"all"
+	],
+
+	"features": {
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"installZsh": "true",
+			"configureZshAsDefaultShell": "true",
+			"installOhMyZsh": "false",
+			"installOhMyZshConfig": "false",
+			"username": "vscode",
+			"userUid": "1000",
+			"userGid": "1000",
+			"upgradePackages": "true"
+		},
+
+		"ghcr.io/devcontainers/features/python:1": {
+			"installTools": "true",
+			"toolsToInstall": "uv,ruff,mypy,MonkeyType,bandit"
+		},
+		"ghcr.io/devcontainers/features/git:1": {
+			"version": "os-provided",
+			"ppa": "false"
+		}
+		},
+	
+	"remoteUser": "vscode",
+	"onCreateCommand": "sudo ln -sf /usr/bin/dash /usr/bin/sh",
+    "postCreateCommand": "cd ./backend && uv sync --upgrade --compile",
+    "postStartCommand": "python -c \"import tensorflow as tf; print('GPUs:', tf.config.list_physical_devices('GPU'))\""
+}

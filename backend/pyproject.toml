@@ -3,7 +3,7 @@ name = "backend"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.120.4",
     "pydantic>=2.12.3",
@@ -15,4 +15,9 @@ dependencies = [
     "tensorflow[and-cuda]>=2.20.0; sys_platform == 'linux'",
     "tf-keras>=2.20.1; sys_platform == 'linux'",
     "transformers>=4.56.1",
+    "torch>=2.9.0",
+    "onnxruntime>=1.23.2",
+    "python-multipart>=0.0.20",
+    "accelerate>=1.11.0",
+    "torchvision>=0.24.0",
 ]

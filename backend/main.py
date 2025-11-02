@@ -9,20 +9,38 @@ from fastapi.responses import JSONResponse
 
 from src.api.image import router_image
 from src.api.health import router_health
-
+from src.core.classify import load_device, load_model, warm_up_model
+from src.utils.memory import clean_up
+from src.core.mask_image import load_generator
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
+    clean_up()
+    logging.info("Cleaned vram gpu usage")
+
+    await load_device()
+    model = await load_model("./models/image_classifier.keras")
+    await warm_up_model(model)
+    app.state.MODEL = model
+    logging.info("Warmuped tf model")
+
+    generator = await load_generator()
+    app.state.GENERATOR = generator  
+    logging.info("Warmuped torch generator")
+    
     logging.info("Startup complete. Initializing resources...")
     yield
+    clean_up()
+    logging.info("Free up gpu resources.")
+
     logging.info("Shutdown complete.")
 
 
 def create_app(use_lifespan: bool = True) -> FastAPI:
     lifespan_ctx = lifespan if use_lifespan else None
     app = FastAPI(
-        title="Video Streaming BFF",
-        description="Backend service powering the video streaming experience.",
+        title="AI Automation Backend",
+        description="Backend service powering the raw_image processing.",
         version="1.0.0",
         docs_url="/docs",
         redoc_url=None,
@@ -36,16 +54,12 @@ def create_app(use_lifespan: bool = True) -> FastAPI:
         },
         openapi_tags=[
             {
-                "name": "files",
-                "description": "Endpoints for uploading, streaming, and downloading video files.",
+                "name": "image_processing",
+                "description": "Endpoints for uploading, processing, and downloading video files.",
             },
             {
                 "name": "health_check",
                 "description": "Health check endpoints that provide liveness and readiness status.",
-            },
-            {
-                "name": "monitoring",
-                "description": "Prometheus metrics endpoints for operational monitoring.",
             },
         ],
         swagger_ui_parameters={
