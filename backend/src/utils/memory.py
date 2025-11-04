@@ -2,7 +2,7 @@ import gc
 import tensorflow as tf
 import torch
 
-def clean_up() -> None:
+def clean_up_vram() -> None:
     """Safely clear TensorFlow and PyTorch GPU/CPU memory."""
     gc.collect()  # free Python references first
 

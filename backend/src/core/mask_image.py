@@ -1,76 +1,109 @@
-import uuid
-from pathlib import Path
+import logging
+import time
 import numpy as np
 from PIL import Image
 from transformers import pipeline
 import torch
+from ..utils.debug import save_debug_image
+
+logger = logging.getLogger("image_processing.segment")
 
 
-async def load_generator():
+# ------------------------------
+# Load SAM2 Generator
+# ------------------------------
+def load_generator():
     """
     Loads the SAM2 model using the Hugging Face pipeline API.
     """
     try:
+        t0 = time.time()
+        logger.info("[segment] Loading SAM2 generator (facebook/sam2.1-hiera-tiny)...")
+
         generator = pipeline(
             task="mask-generation",
             model="facebook/sam2.1-hiera-tiny",
-            device_map="auto",
-            dtype=torch.float32,
+            device=0,
+            dtype="auto",
+            use_fast=True,
+            multimask_output=False,
         )
+        generator.model = generator.model.to(torch.device("cuda"))
         torch.set_float32_matmul_precision("medium")
-        print(f"✅ SAM2 generator loaded on: {generator.device}")
+
+        elapsed = time.time() - t0
+        device = getattr(generator, "device", "unknown")
+        logger.info(f"✅ SAM2 generator loaded on: {device} in {elapsed:.2f}s")
         return generator
     except Exception as e:
-        print(f"❌ Failed to load SAM2 generator: {e}")
+        logger.exception(f"❌ Failed to load SAM2 generator: {e}")
         return None
 
 
-async def mask_image(raw_image: Image.Image, generator, size=(256, 256)) -> list[Image.Image]:
+# ------------------------------
+# Run SAM2 Mask Generation
+# ------------------------------
+def mask_image(
+    raw_image: Image.Image,
+    generator
+) -> list[Image.Image]:
     """
-    Generates segmented masked images from a raw image using the SAM2 mask-generation model.
+    Generates segmented masks from a raw image using the SAM2 mask-generation model.
     """
     if generator is None:
         raise ValueError("❌ Generator not initialized. Call load_generator() first.")
 
-    # Use /tmp or module-local temp folder (safer in containers)
-    image_output_dir = (Path(__file__).resolve().parent / "temp" / uuid.uuid4().hex)
-    image_output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        logger.info(f"[segment] Starting mask generation — input size={raw_image.size}")
+        t0 = time.time()
 
-    # Run inference
-    with torch.inference_mode():
-        # with torch.autocast(device_type="cuda", enabled=False):
-            outputs = generator(
-                raw_image,
-                points_per_batch=128,
-                use_fast=True,
-                multimask_output=False,
-            )
+        with torch.inference_mode():
+            outputs = generator(raw_image)
 
+        # Ensure CUDA sync + cleanup
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+            logger.debug("[segment] GPU synchronized + cache cleared")
 
-    torch.cuda.synchronize()
-    torch.cuda.empty_cache()
+        segmented_masks = []
 
-    img_array = np.array(raw_image.convert("RGB"))
-    segmented_masks = []
+        masks = outputs.get("masks", [])
+        logger.info(f"[segment] SAM2 returned {len(masks)} mask(s)")
 
-    for i, mask in enumerate(outputs["masks"]):
-        mask = mask.squeeze()
+        for i, mask in enumerate(masks, start=1):
+            try:
+                if isinstance(mask, torch.Tensor):
+                    m = mask[0].cpu().numpy() if mask.ndim == 3 else mask.cpu().numpy()
+                else:
+                    m = np.asarray(mask)
+                    if m.ndim == 3:
+                        m = m[0]
 
-        # Ensure tensor → NumPy conversion
-        if isinstance(mask, torch.Tensor):
-            mask = (mask > 0.5).to(torch.uint8).cpu().numpy()
-        else:
-            mask = (mask > 0.5).astype(np.uint8)
+                m = m.astype(np.float32)
 
+                base = np.array(raw_image)
+                segmented_img = (base * m[..., None]).astype(np.uint8)
 
-        # Resize and reapply mask
-        mask_resized = Image.fromarray(mask * 255).resize(size=size, resample=Image.NEAREST)
-        mask_array = np.array(mask_resized) // 255
-        segmented_array = img_array * mask_array[..., None]
+                save_debug_image(Image.fromarray(segmented_img), f"mask_{i}", prefix="seg")
+                segmented_masks.append(segmented_img)
 
-        segmented_img = Image.fromarray(segmented_array.astype(np.uint8))
-        segmented_img.save(image_output_dir / f"segment_{i}.png")
-        segmented_masks.append(segmented_img)
+                logger.debug(f"[segment] Mask {i}: applied successfully")
 
-    print(f"✅ Created {len(segmented_masks)} segmented images in {image_output_dir}")
-    return segmented_masks
+            except Exception as inner_e:
+                logger.exception(f"[segment] Failed to process mask {i}: {inner_e}")
+                raise
+        
+        elapsed = time.time() - t0
+        logger.info(f"✅ Created {len(segmented_masks)} segmented images in {elapsed:.2f}s")
+
+        return segmented_masks
+
+    except torch.cuda.OutOfMemoryError as oom:
+        logger.exception("❌ CUDA OOM during mask generation — consider smaller image or CPU fallback.")
+        torch.cuda.empty_cache()
+        raise oom
+
+    except Exception as e:
+        logger.exception(f"[segment] Unexpected error during segmentation: {e}")
+        raise

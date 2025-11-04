@@ -1,7 +1,7 @@
+import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
-
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,86 +10,103 @@ from fastapi.responses import JSONResponse
 from src.api.image import router_image
 from src.api.health import router_health
 from src.core.classify import load_device, load_model, warm_up_model
-from src.utils.memory import clean_up
+from src.core.upscaler import warmup_onnx_model
 from src.core.mask_image import load_generator
+from src.utils import clean_up_vram, setup_logging, clean_up_debug
+import torch
 
+
+# ------------------------------
+# ASYNC LIFESPAN MANAGEMENT
+# ------------------------------
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator:
-    clean_up()
-    logging.info("Cleaned vram gpu usage")
+async def lifespan(app: FastAPI):
+    """
+    Handles startup and shutdown lifecycle of the FastAPI application.
+    Loads and warms up ML models, configures logging, and ensures cleanup.
+    """
+    t0 = time.time()
+    setup_logging()
+    logging.info("🧠 Initializing application lifespan context...")
 
-    await load_device()
-    model = await load_model("./models/image_classifier.keras")
-    await warm_up_model(model)
-    app.state.MODEL = model
-    logging.info("Warmuped tf model")
+    try:
+        # --- Basic setup ---
+        torch.set_float32_matmul_precision("medium")
+        torch.set_grad_enabled(False)
 
-    generator = await load_generator()
-    app.state.GENERATOR = generator  
-    logging.info("Warmuped torch generator")
-    
-    logging.info("Startup complete. Initializing resources...")
-    yield
-    clean_up()
-    logging.info("Free up gpu resources.")
+        clean_up_debug()
+        clean_up_vram()
+        logging.info("✅ Cleaned up temporary GPU memory and cache")
 
-    logging.info("Shutdown complete.")
+        # ------------------------------
+        # 🔹 Load all models in threads (so event loop not blocked)
+        # ------------------------------
+        logging.info("⚙️ Loading models in background threads...")
+
+        # TensorFlow (sync functions wrapped)
+        await asyncio.to_thread(load_device)
+        model = await asyncio.to_thread(load_model, "./models/image_classifier.keras")
+        await asyncio.to_thread(warm_up_model, model)
+        app.state.MODEL = model
+        logging.info("✅ TensorFlow model loaded & warmed up")
+
+        # Torch SAM2 (sync)
+        generator = await asyncio.to_thread(load_generator)
+        if generator is None:
+            logging.error("❌ Failed to initialize SAM2 generator")
+        else:
+            app.state.GENERATOR = generator
+            logging.info("✅ SAM2 generator initialized")
+
+        # ONNX upscaler (sync)
+        upscaler = await asyncio.to_thread(warmup_onnx_model, "./models/modelx4.ort", (1, 3, 128, 128))
+        app.state.UPSCALER = upscaler
+        logging.info("✅ ONNX upscaler warmed up")
+
+        total_time = time.time() - t0
+        logging.info(f"🚀 Startup complete in {total_time:.2f}s — all models ready.")
+        yield
+
+    except Exception as e:
+        logging.exception(f"❌ Fatal startup error: {e}")
+        raise
+
+    finally:
+        try:
+            clean_up_vram()
+            logging.info("🧹 GPU and cache resources freed on shutdown")
+        except Exception as e:
+            logging.exception(f"⚠️ Cleanup error: {e}")
+        logging.info("🛑 Shutdown complete.")
 
 
+# ------------------------------
+# APP FACTORY
+# ------------------------------
 def create_app(use_lifespan: bool = True) -> FastAPI:
     lifespan_ctx = lifespan if use_lifespan else None
+
     app = FastAPI(
         title="AI Automation Backend",
-        description="Backend service powering the raw_image processing.",
+        description="Backend service powering the raw_image processing pipeline.",
         version="1.0.0",
         docs_url="/docs",
-        redoc_url=None,
         openapi_url="/openapi.json",
-        contact={
-            "name": "John Doe",
-            "email": "john@example.com",
-        },
-        license_info={
-            "name": "MIT",
-        },
-        openapi_tags=[
-            {
-                "name": "image_processing",
-                "description": "Endpoints for uploading, processing, and downloading video files.",
-            },
-            {
-                "name": "health_check",
-                "description": "Health check endpoints that provide liveness and readiness status.",
-            },
-        ],
+        lifespan=lifespan_ctx,
         swagger_ui_parameters={
             "deepLinking": True,
-            "defaultModelsExpandDepth": 2,  # show all models and schemas expanded
-            "defaultModelExpandDepth": 2,  # expand individual model fields
+            "defaultModelsExpandDepth": 2,
             "displayRequestDuration": True,
-            "displayOperationDuration": True,
-            "defaultModelRendering": "example",
-            "showMutatedRequest": True,
-            "docExpansion": "list",  # expand all tags (groups) by default
-            "supportedSubmitMethods": ["get", "post", "put", "delete", "patch"],
-            "filter": True,
-            "showExtensions": True,  # show any x-* vendor extensions
-            "showCommonExtensions": True,  # show standard extensions like x-codeSamples
-            "syntaxHighlight": True,  # enable syntax highlighting for request/response
-            "requestSnippetsEnabled": True,
+            "docExpansion": "list",
         },
-        lifespan=lifespan_ctx,
     )
 
+    # Routers
     app.include_router(router_health)
     app.include_router(router_image)
 
-
-    origins = [
-        "http://localhost",
-        "http://127.0.0.1",
-    ]
-
+    # CORS
+    origins = ["http://localhost", "http://127.0.0.1"]
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
@@ -98,8 +115,10 @@ def create_app(use_lifespan: bool = True) -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Exception handlers
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc) -> JSONResponse:
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        logging.warning(f"HTTPException: {exc.detail} [{exc.status_code}]")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -110,23 +129,19 @@ def create_app(use_lifespan: bool = True) -> FastAPI:
         )
 
     @app.exception_handler(Exception)
-    async def unhandled_exception_handler(
-        request: Request, exc: Exception
-    ) -> JSONResponse:
+    async def unhandled_exception_handler(request: Request, exc: Exception):
         logging.exception(f"Unhandled error: {exc}")
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Internal server error"},
-        )
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc) -> JSONResponse:
-        return JSONResponse(
-            status_code=400,
-            content={"detail": str(exc)},
-        )
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        logging.warning(f"Validation error: {exc}")
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
 
     return app
 
 
+# ------------------------------
+# ENTRYPOINT
+# ------------------------------
 app = create_app()
