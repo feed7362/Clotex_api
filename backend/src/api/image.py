@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import List
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image
 from fastapi import (
     APIRouter,
     UploadFile,
@@ -16,7 +16,7 @@ from fastapi import (
     HTTPException,
     Request,
     WebSocket,
-    Query
+    Form,
 )
 from fastapi.responses import JSONResponse, FileResponse
 
@@ -63,7 +63,7 @@ def _thumb_b64(img: Image.Image, max_side: int = THUMB_MAX_SIDE) -> str:
 async def process_images(
     request: Request,
     files: List[UploadFile] = File(..., description="One or more images to process"),
-    k_means: int = Query(0, description="Enable K-means 0 for true and other for manual")
+    k_means: int = Form(0, description="0 = auto (K-means auto selection), 1–10 = manual number of colors"),
 ):
     """
     Processes multiple images. Returns:
@@ -137,14 +137,14 @@ async def process_images(
                         png_bytes = _png_bytes(layer_img)
                         zipf.writestr(rel_path, png_bytes)
                         encoded_layers.append({
-                            "id": idx,
-                            "color": layer_hex,
+                            "layer_number": idx,
+                            "color_hex": layer_hex,
                             "path": rel_path,
                             "image_base64": _thumb_b64(layer_img),  # thumbnail for UI
                         })
 
                     if WRITE_MANIFEST:
-                        manifest = {"filename": file_name, "layers": [{"id": l["id"], "color": l["color"], "path": l["path"]} for l in encoded_layers]}
+                        manifest = {"filename": file_name, "layers": [{"layer_number": l["layer_number"], "color_hex": l["color_hex"], "path": l["path"]} for l in encoded_layers]}
                         zipf.writestr(f"{name_stem}/manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8"))
 
                     overall_results.append({"image": file_name, "layers": encoded_layers})
@@ -269,8 +269,8 @@ async def ws_process(websocket: WebSocket):
                         rel_path = f"{name_stem}/layer_{idx}_{layer_hex}.png"
                         zipf.writestr(rel_path, _png_bytes(layer_img))
                         encoded_layers.append({
-                            "id": idx,
-                            "color": layer_hex,
+                            "layer_number": idx,
+                            "color_hex": layer_hex,
                             "path": rel_path,
                             "image_base64": _thumb_b64(layer_img),
                         })
@@ -279,7 +279,7 @@ async def ws_process(websocket: WebSocket):
                         manifest = {
                             "filename": file_name,
                             "layers": [
-                                {"id": l["id"], "color": l["color"], "path": l["path"]}
+                                {"layer_number": l["layer_number"], "color_hex": l["color_hex"], "path": l["path"]}
                                 for l in encoded_layers
                             ],
                         }

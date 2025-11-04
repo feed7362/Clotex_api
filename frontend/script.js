@@ -2,6 +2,8 @@
 let uploadedFile = null;
 let processedLayers = [];
 let layerImages = [];
+let currentFileId = null;
+let zipDownloadUrl = null;
 
 // DOM елементи
 const uploadArea = document.getElementById('uploadArea');
@@ -19,6 +21,8 @@ const previewCanvas = document.getElementById('previewCanvas');
 const layerControls = document.getElementById('layerControls');
 const layersContainer = document.getElementById('layersContainer');
 const downloadAllBtn = document.getElementById('downloadAllBtn');
+const layerOpacity = document.getElementById('layerOpacity');
+const opacityValue = document.getElementById('opacityValue');
 
 // Ініціалізація
 document.addEventListener('DOMContentLoaded', () => {
@@ -37,6 +41,14 @@ function initializeEventListeners() {
             fileInput.click();
         }
     });
+
+        if (layerOpacity) {
+        layerOpacity.addEventListener('input', (e) => {
+            const val = Number(e.target.value);
+            opacityValue.textContent = `${val}%`;
+            drawPreviewCanvas();
+        });
+    }
     
     fileInput.addEventListener('change', handleFileSelect);
     
@@ -47,7 +59,8 @@ function initializeEventListeners() {
     
     // Слайдери
     colorCount.addEventListener('input', (e) => {
-        colorValue.textContent = e.target.value;
+        const val = Number(e.target.value);
+        colorValue.textContent = val === 0 ? 'AUTO' : val;
     });
     
     tolerance.addEventListener('input', (e) => {
@@ -130,60 +143,66 @@ async function processImage() {
     resultsSection.classList.add('hidden');
     progressSection.classList.remove('hidden');
     processBtn.disabled = true;
-    
+
+    let fakeProgress = 10;
+    updateProgress(fakeProgress, 'Завантаження зображення на сервер...');
+
+    // start fake progress timer
+    const progressTimer = setInterval(() => {
+        if (fakeProgress < 90) {
+            fakeProgress += 1;
+            updateProgress(fakeProgress, 'Обробка зображення моделлю...');
+        }
+    }, 400);
+
     try {
-        // Створити FormData
         const formData = new FormData();
-        formData.append('image', uploadedFile);
-        formData.append('n_colors', colorCount.value);
-        formData.append('tolerance', tolerance.value);
-        
-        // Відправити запит до Flask API
-        updateProgress(10, 'Завантаження зображення на сервер...');
-        
-        const response = await fetch('http://localhost:5000/process', {
+        formData.append('files', uploadedFile);
+        formData.append('k_means', colorCount.value);
+
+        const response = await fetch('http://127.0.0.1:8080/api/raw_image/process', {
             method: 'POST',
-            mode: 'cors',
-            body: formData
+            body: formData,
         });
-        
+
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error || 'Помилка обробки зображення');
+            throw new Error(errorData.detail?.error || 'Помилка обробки зображення');
         }
-        
-        updateProgress(50, 'Обробка зображення моделлю...');
-        
+
         const data = await response.json();
-        
-        if (!data.success) {
+
+        if (data.status !== 'success' && data.status !== 'partial_success') {
             throw new Error('Сервер повернув помилку');
         }
-        
-        updateProgress(80, 'Завантаження результатів...');
-        
-        // Зберегти дані
-        processedLayers = data.layers;
-        
-        // Завантажити зображення шарів
-        await loadLayerImages(data.layers);
-        
+
+        clearInterval(progressTimer);
+        updateProgress(95, 'Завантаження результатів...');
+
+        const imageResult = data.results[0];
+        processedLayers = imageResult.layers;
+
+        // save download URL for "Завантажити всі"
+        currentFileId = data.file_id;
+        zipDownloadUrl = `http://127.0.0.1:8080${data.download_url}`;
+
+        await loadLayerImages(processedLayers);
+
         updateProgress(100, 'Готово!');
-        
-        showNotification(`Успішно створено ${data.layers.length} шарів!`, 'success');
-        
-        // Показати результати
+        showNotification(`✅ Успішно створено ${processedLayers.length} шарів!`, 'success');
+
         setTimeout(() => {
             progressSection.classList.add('hidden');
             displayResults();
         }, 500);
-        
+
     } catch (error) {
+        clearInterval(progressTimer);
         console.error('Помилка:', error);
         updateProgress(0, '❌ Помилка обробки: ' + error.message);
         showNotification('Помилка: ' + error.message, 'error');
         processBtn.disabled = false;
-        
+
         setTimeout(() => {
             progressSection.classList.add('hidden');
         }, 3000);
@@ -226,27 +245,29 @@ function displayResults() {
 
 function drawPreviewCanvas() {
     const ctx = previewCanvas.getContext('2d');
-    
     if (layerImages.length === 0) return;
-    
-    // Встановити розмір canvas
+
     const firstImg = layerImages[0];
     previewCanvas.width = firstImg.width;
     previewCanvas.height = firstImg.height;
-    
-    // Очистити canvas
+
     ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-    
-    // Підрахувати кількість видимих шарів для правильної прозорості
+
     const visibleLayers = layerImages.filter((_, index) => {
         const checkbox = document.getElementById(`layer-${index}`);
         return !checkbox || checkbox.checked;
     });
-    
-    // Встановити прозорість залежно від кількості видимих шарів
-    const opacity = visibleLayers.length > 1 ? 0.85 / Math.sqrt(visibleLayers.length) : 1;
-    
-    // Намалювати всі видимі шари з прозорістю
+
+    if (visibleLayers.length === 0) return;
+
+    // Base opacity from slider (20–100%)
+    const sliderOpacity = layerOpacity ? Number(layerOpacity.value) / 100 : 0.85;
+
+    // Slightly reduce opacity if many layers visible
+    const opacity = visibleLayers.length > 1
+        ? sliderOpacity / Math.sqrt(visibleLayers.length)
+        : sliderOpacity;
+
     layerImages.forEach((img, index) => {
         const checkbox = document.getElementById(`layer-${index}`);
         if (!checkbox || checkbox.checked) {
@@ -255,8 +276,6 @@ function drawPreviewCanvas() {
             ctx.drawImage(img, 0, 0);
         }
     });
-    
-    // Повернути прозорість до нормальної
     ctx.globalAlpha = 1;
 }
 
@@ -322,15 +341,23 @@ function downloadLayer(index) {
 }
 
 function downloadAllLayers() {
-    processedLayers.forEach((layer, index) => {
-        setTimeout(() => downloadLayer(index), index * 200);
-    });
+    if (!zipDownloadUrl) {
+        showNotification('Файл архіву ще не готовий. Спочатку обробіть зображення.', 'error');
+        return;
+    }
+
+    const link = document.createElement('a');
+    link.href = zipDownloadUrl;
+    link.download = `processed_layers_${currentFileId || ''}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
 }
 
 // Перевірка доступності API
 async function checkAPIHealth() {
     try {
-        const response = await fetch('http://localhost:5000/health', {
+        const response = await fetch('http://127.0.0.1:8080/api/health/live', {
             method: 'GET',
             mode: 'cors'
         });
@@ -343,7 +370,7 @@ async function checkAPIHealth() {
         }
     } catch (error) {
         console.error('❌ API сервер недоступний:', error);
-        showNotification('⚠️ Не вдалося підключитися до API. Переконайтесь що Flask запущений: python app.py', 'error');
+        showNotification('⚠️ Не вдалося підключитися до API. Переконайтесь що Backend запущений', 'error');
     }
 }
 

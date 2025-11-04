@@ -106,10 +106,10 @@ def create_app(use_lifespan: bool = True) -> FastAPI:
     app.include_router(router_image)
 
     # CORS
-    origins = ["http://localhost", "http://127.0.0.1"]
+    # origins = ["http://localhost", "http://127.0.0.1"]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=origins,
+        allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
