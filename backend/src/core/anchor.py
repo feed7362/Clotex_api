@@ -9,9 +9,9 @@ logger = logging.getLogger("image_processing.anchors")
 
 def add_anchors(
     image: Image.Image,
-    cross_size: int = 15,
+    cross_size: int = 28,
     margin: int = 25,
-    outline_width: int = 3,
+    outline_width: int = 20,
 ) -> Image.Image:
     """Add strong registration anchors (+) to 4 corners."""
     try:

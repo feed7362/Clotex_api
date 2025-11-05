@@ -20,4 +20,6 @@ dependencies = [
     "python-multipart>=0.0.20",
     "accelerate>=1.11.0",
     "torchvision>=0.24.0",
+    "ultralytics>=8.3.225",
+    "psd-tools>=1.10.13",
 ]

@@ -104,7 +104,7 @@ def load_and_preprocess(img, target_size=(256, 256)):
 def classify_masks(
     model,
     segmented_masks,
-    threshold: float = 0.5
+    threshold: float = 0.7
 ) -> List[Image.Image]:
     """
     Classifies masks and returns those above the threshold.

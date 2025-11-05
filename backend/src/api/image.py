@@ -26,6 +26,7 @@ from ..core import (
     upscale_pil,
     separate_color_layers_batch,
     add_anchors_to_layers,
+    psd_convertor,
 )
 
 logger = logging.getLogger("image_processing")
@@ -146,6 +147,13 @@ async def process_images(
                     if WRITE_MANIFEST:
                         manifest = {"filename": file_name, "layers": [{"layer_number": l["layer_number"], "color_hex": l["color_hex"], "path": l["path"]} for l in encoded_layers]}
                         zipf.writestr(f"{name_stem}/manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8"))
+
+                    psd_bytes = psd_convertor(
+                        [layer_img for layer_img, _ in final],
+                        [f"Layer_{idx}_{color}" for idx, (_, color) in enumerate(final, start=1)]
+                    )
+                    zipf.writestr(f"{name_stem}/output.psd", psd_bytes)
+                    logger.info(f"[{file_name}] PSD file added to ZIP")
 
                     overall_results.append({"image": file_name, "layers": encoded_layers})
                     logger.info(f"[{file_name}] completed successfully")

@@ -2,7 +2,7 @@ import logging
 import time
 import numpy as np
 from PIL import Image
-from transformers import pipeline
+from ultralytics import FastSAM
 import torch
 from ..utils.debug import save_debug_image
 
@@ -12,32 +12,35 @@ logger = logging.getLogger("image_processing.segment")
 # ------------------------------
 # Load SAM2 Generator
 # ------------------------------
-def load_generator():
+def load_generator(model_path: str = "FastSAM-x.pt", device: str = "cuda"):
     """
     Loads the SAM2 model using the Hugging Face pipeline API.
     """
     try:
         t0 = time.time()
-        logger.info("[segment] Loading SAM2 generator (facebook/sam2.1-hiera-tiny)...")
+        logger.info(f"[FastSAM] Loading model from {model_path} on {device}...")
 
-        generator = pipeline(
-            task="mask-generation",
-            model="facebook/sam2.1-hiera-tiny",
-            device=0,
-            dtype="auto",
-            use_fast=True,
-            multimask_output=False,
-        )
-        generator.model = generator.model.to(torch.device("cuda"))
+        model = FastSAM(model_path)
+        model.to(device)
         torch.set_float32_matmul_precision("medium")
 
+        # -------- Warm-up --------
+        dummy = np.zeros((512, 512, 3), dtype=np.uint8)
+        dummy_image = Image.fromarray(dummy)
+        logger.info("[FastSAM] Warming up model on dummy image...")
+        with torch.inference_mode():
+            _ = model(dummy_image)
+
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            logger.info(f"[FastSAM] CUDA warm-up complete, VRAM: {torch.cuda.memory_allocated() / 1e6:.1f} MB")
+
         elapsed = time.time() - t0
-        device = getattr(generator, "device", "unknown")
-        logger.info(f"✅ SAM2 generator loaded on: {device} in {elapsed:.2f}s")
-        return generator
+        logger.info(f"✅ FastSAM loaded and warmed up in {elapsed:.2f}s")
+        return model
     except Exception as e:
-        logger.exception(f"❌ Failed to load SAM2 generator: {e}")
-        return None
+        logger.exception(f"[FastSAM] Failed to extract masks: {e}")
+        return []
 
 
 # ------------------------------
@@ -45,12 +48,12 @@ def load_generator():
 # ------------------------------
 def mask_image(
     raw_image: Image.Image,
-    generator
+    model
 ) -> list[Image.Image]:
     """
     Generates segmented masks from a raw image using the SAM2 mask-generation model.
     """
-    if generator is None:
+    if model is None:
         raise ValueError("❌ Generator not initialized. Call load_generator() first.")
 
     try:
@@ -58,7 +61,15 @@ def mask_image(
         t0 = time.time()
 
         with torch.inference_mode():
-            outputs = generator(raw_image)
+            outputs = model(
+                raw_image, 
+                retina_masks=True, 
+                imgsz=620, 
+                conf=0.7, 
+                iou=0.65,
+                verbose=False,
+                max_det=10
+                )
 
         # Ensure CUDA sync + cleanup
         if torch.cuda.is_available():
@@ -67,21 +78,19 @@ def mask_image(
             logger.debug("[segment] GPU synchronized + cache cleared")
 
         segmented_masks = []
+        result = outputs[0] if isinstance(outputs, list) else outputs
 
-        masks = outputs.get("masks", [])
-        logger.info(f"[segment] SAM2 returned {len(masks)} mask(s)")
+        if not hasattr(result, "masks") or result.masks is None:
+            logger.warning("[segment] No masks found in FastSAM output.")
+            return []
+
+        masks = result.masks.data
+        
+        logger.info(f"[segment] FastSAM returned {len(masks)} mask(s)")
 
         for i, mask in enumerate(masks, start=1):
-            try:
-                if isinstance(mask, torch.Tensor):
-                    m = mask[0].cpu().numpy() if mask.ndim == 3 else mask.cpu().numpy()
-                else:
-                    m = np.asarray(mask)
-                    if m.ndim == 3:
-                        m = m[0]
-
-                m = m.astype(np.float32)
-
+            try:    
+                m = mask.cpu().numpy().astype(np.float32)
                 base = np.array(raw_image)
                 segmented_img = (base * m[..., None]).astype(np.uint8)
 
