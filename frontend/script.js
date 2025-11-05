@@ -160,7 +160,7 @@ async function processImage() {
         formData.append('files', uploadedFile);
         formData.append('k_means', colorCount.value);
 
-        const response = await fetch('http://127.0.0.1:8080/api/raw_image/process', {
+        const response = await fetch('api/raw_image/process', {
             method: 'POST',
             body: formData,
         });
@@ -184,7 +184,7 @@ async function processImage() {
 
         // save download URL for "Завантажити всі"
         currentFileId = data.file_id;
-        zipDownloadUrl = `http://127.0.0.1:8080${data.download_url}`;
+        zipDownloadUrl = `${data.download_url}`;
 
         await loadLayerImages(processedLayers);
 
@@ -357,7 +357,7 @@ function downloadAllLayers() {
 // Перевірка доступності API
 async function checkAPIHealth() {
     try {
-        const response = await fetch('http://127.0.0.1:8080/api/health/live', {
+        const response = await fetch('api/health/live', {
             method: 'GET',
             mode: 'cors'
         });
@@ -425,4 +425,5 @@ style.textContent = `
         }
     }
 `;
+
 document.head.appendChild(style);
