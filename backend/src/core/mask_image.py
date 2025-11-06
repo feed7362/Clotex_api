@@ -12,7 +12,7 @@ logger = logging.getLogger("image_processing.segment")
 # ------------------------------
 # Load SAM2 Generator
 # ------------------------------
-def load_generator(model_path: str = "FastSAM-x.pt", device: str = "cuda"):
+def load_generator(model_path: str = "./models/FastSAM-x.pt", device: str = "cuda"):
     """
     Loads the SAM2 model using the Hugging Face pipeline API.
     """
@@ -40,7 +40,7 @@ def load_generator(model_path: str = "FastSAM-x.pt", device: str = "cuda"):
         return model
     except Exception as e:
         logger.exception(f"[FastSAM] Failed to extract masks: {e}")
-        return []
+        return
 
 
 # ------------------------------
@@ -48,7 +48,7 @@ def load_generator(model_path: str = "FastSAM-x.pt", device: str = "cuda"):
 # ------------------------------
 def mask_image(
     raw_image: Image.Image,
-    model
+    model: FastSAM
 ) -> list[Image.Image]:
     """
     Generates segmented masks from a raw image using the SAM2 mask-generation model.

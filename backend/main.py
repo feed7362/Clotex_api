@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
         logging.info("✅ TensorFlow model loaded & warmed up")
 
         # Torch SAM2 (sync)
-        generator = await asyncio.to_thread(load_generator("./models/FastSAM-x.pt"))
+        generator = await asyncio.to_thread(load_generator)
         if generator is None:
             logging.error("❌ Failed to initialize SAM2 generator")
         else:

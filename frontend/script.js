@@ -21,13 +21,14 @@ const previewCanvas = document.getElementById('previewCanvas');
 const layerControls = document.getElementById('layerControls');
 const layersContainer = document.getElementById('layersContainer');
 const downloadAllBtn = document.getElementById('downloadAllBtn');
+const newImageBtn = document.getElementById('newImageBtn');
 const layerOpacity = document.getElementById('layerOpacity');
 const opacityValue = document.getElementById('opacityValue');
 
 // Ініціалізація
 document.addEventListener('DOMContentLoaded', () => {
     initializeEventListeners();
-    console.log('🎨 Screen Print Separator готовий до роботи!');
+    console.log(' Screen Print Separator готовий до роботи!');
     
     // Перевірка доступності API
     checkAPIHealth();
@@ -72,6 +73,9 @@ function initializeEventListeners() {
     
     // Завантажити всі шари
     downloadAllBtn.addEventListener('click', downloadAllLayers);
+
+    // Кнопка "Нове зображення"
+    newImageBtn.addEventListener('click', resetToUpload);
 }
 
 // Обробка файлів
@@ -160,7 +164,7 @@ async function processImage() {
         formData.append('files', uploadedFile);
         formData.append('k_means', colorCount.value);
 
-        const response = await fetch('api/raw_image/process', {
+        const response = await fetch('http://127.0.0.1:8080/api/raw_image/process', {
             method: 'POST',
             body: formData,
         });
@@ -184,7 +188,7 @@ async function processImage() {
 
         // save download URL for "Завантажити всі"
         currentFileId = data.file_id;
-        zipDownloadUrl = `${data.download_url}`;
+        zipDownloadUrl = `http://127.0.0.1:8080${data.download_url}`;
 
         await loadLayerImages(processedLayers);
 
@@ -199,7 +203,7 @@ async function processImage() {
     } catch (error) {
         clearInterval(progressTimer);
         console.error('Помилка:', error);
-        updateProgress(0, '❌ Помилка обробки: ' + error.message);
+        updateProgress(0, ' Помилка обробки: ' + error.message);
         showNotification('Помилка: ' + error.message, 'error');
         processBtn.disabled = false;
 
@@ -357,20 +361,20 @@ function downloadAllLayers() {
 // Перевірка доступності API
 async function checkAPIHealth() {
     try {
-        const response = await fetch('api/health/live', {
+        const response = await fetch('http://127.0.0.1:8080/api/health/live', {
             method: 'GET',
             mode: 'cors'
         });
         if (response.ok) {
-            console.log('✅ API сервер доступний');
+            console.log(' API сервер доступний');
             showNotification('API сервер підключено успішно!', 'success');
         } else {
-            console.warn('⚠️ API сервер відповів з помилкою');
+            console.warn(' API сервер відповів з помилкою');
             showNotification('API сервер працює, але є попередження', 'error');
         }
     } catch (error) {
         console.error('❌ API сервер недоступний:', error);
-        showNotification('⚠️ Не вдалося підключитися до API. Переконайтесь що Backend запущений', 'error');
+        showNotification(' Не вдалося підключитися до API. Переконайтесь що Backend запущений', 'error');
     }
 }
 
@@ -425,5 +429,45 @@ style.textContent = `
         }
     }
 `;
-
 document.head.appendChild(style);
+
+
+// Скинути до початкового стану
+function resetToUpload() {
+    // Очистити дані
+    uploadedFile = null;
+    processedLayers = [];
+    layerImages = [];
+    currentFileId = null;
+    zipDownloadUrl = null;
+    
+    // Сховати результати
+    resultsSection.classList.add('hidden');
+    
+    // Показати зону завантаження
+    const uploadContent = document.getElementById('uploadContent');
+    const previewDiv = document.getElementById('previewImage');
+    uploadContent.classList.remove('hidden');
+    previewDiv.classList.add('hidden');
+    previewDiv.innerHTML = '';
+    
+    // Скинути стиль зони завантаження
+    uploadArea.style.padding = '';
+    
+    // Очистити input
+    fileInput.value = '';
+    
+    // Скинути слайдери
+    colorCount.value = '0';
+    colorValue.textContent = 'AUTO';
+    tolerance.value = '30';
+    toleranceValue.textContent = '30';
+    
+    // Деактивувати кнопку обробки
+    processBtn.disabled = true;
+    
+    // Прокрутити вгору
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    showNotification(' Готово до нового завантаження!', 'success');
+}

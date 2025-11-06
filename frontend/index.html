@@ -18,18 +18,7 @@
         <!-- Hero Section -->
         <header class="hero">
             <div class="logo">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="url(#gradient1)" />
-                    <path d="M2 17L12 22L22 17" stroke="url(#gradient1)" stroke-width="2" />
-                    <path d="M2 12L12 17L22 12" stroke="url(#gradient1)" stroke-width="2" />
-                    <defs>
-                        <linearGradient id="gradient1" x1="2" y1="2" x2="22" y2="22">
-                            <stop offset="0%" stop-color="#667eea" />
-                            <stop offset="100%" stop-color="#764ba2" />
-                        </linearGradient>
-                    </defs>
-                </svg>
-                <span>Screen Print AI</span>
+                <img src="logo.png" alt="Screen Print AI" width="350" height="120">
             </div>
             
             <div class="hero-content">
@@ -64,9 +53,23 @@
             <section class="upload-section card-modern">
                 <div class="section-header">
                     <h3>
-                        <span class="step-badge">01</span>
-                        Завантажте зображення
+                        <span class="step-badge">02</span>
+                        Результати
                     </h3>
+                    <div style="display: flex; gap: 1rem;">
+                        <button id="newImageBtn" class="btn-outline">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                            </svg>
+                            Нове зображення
+                        </button>
+                        <button id="downloadAllBtn" class="btn-outline">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                            </svg>
+                            Завантажити всі
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="upload-area" id="uploadArea">
@@ -187,24 +190,9 @@
         </main>
 
         <!-- Footer -->
-        <footer class="footer">
-            <div class="footer-content">
-                <div class="footer-logo">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="url(#gradient2)" />
-                        <defs>
-                            <linearGradient id="gradient2" x1="2" y1="2" x2="22" y2="22">
-                                <stop offset="0%" stop-color="#667eea" />
-                                <stop offset="100%" stop-color="#764ba2" />
-                            </linearGradient>
-                        </defs>
-                    </svg>
-                    <span>Screen Print AI</span>
-                </div>
-                <p>Powered by AI • Made with ❤️ in Ukraine • 2025</p>
-            </div>
-        </footer>
-    </div>
+        <div class="footer-logo">
+    <img src="logo.png" alt="Screen Print AI" width="350" height="120">
+</div>
 
     <script src="script.js"></script>
 </body>
